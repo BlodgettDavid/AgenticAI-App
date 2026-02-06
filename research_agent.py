@@ -1,42 +1,66 @@
-from agenticai.core.agent import BaseAgent
-from agenticai.core.message import Message
-from agenticai.tools.search_tool import SearchTool
+class Message:
+    def __init__(self, role: str, content: str):
+        self.role = role
+        self.content = content
+
+    def __repr__(self):
+        return f"{self.role}: {self.content}"
 
 
-class ResearchAgent(BaseAgent):
-    """
-    A simple agent that:
-    - receives user input
-    - decides whether to use the search tool
-    - returns a Message object
-    """
+class Tool:
+    name = "base_tool"
+    description = "Base tool interface"
 
-    def __init__(self):
-        super().__init__(name="ResearchAgent")
-        self.search = SearchTool()
+    def run(self, query: str) -> str:
+        raise NotImplementedError("Tool subclasses must implement run().")
 
-    def step(self, user_input: str) -> Message:
-        """
-        Very simple logic:
-        - if the user asks to 'search', call the SearchTool
-        - otherwise, echo a placeholder response
-        """
-        if user_input.lower().startswith("search "):
-            query = user_input[len("search "):]
-            result = self.search.run(query)
-            return Message(role="assistant", content=result, tool_name="search")
 
-        # Default behavior
-        return Message(role="assistant", content=f"You said: {user_input}")
-    
+class SearchTool(Tool):
+    name = "search"
+    description = "Placeholder search tool"
+
+    def run(self, query: str) -> str:
+        return f"[Search results for: {query}] (placeholder)"
+
+
+class ResearchAgent:
+    def __init__(self, tools=None):
+        self.tools = tools or []
+        self.history = []
+
+    def add_message(self, role: str, content: str):
+        msg = Message(role, content)
+        self.history.append(msg)
+
+    def choose_tool(self, user_input: str):
+        # Very simple heuristic for now
+        for tool in self.tools:
+            if tool.name in user_input.lower():
+                return tool
+        return None
+
+    def run(self):
+        print("ResearchAgent ready. Type 'exit' to quit.")
+
+        while True:
+            user_input = input("You: ")
+            if user_input.lower() == "exit":
+                break
+
+            self.add_message("user", user_input)
+
+            tool = self.choose_tool(user_input)
+            if tool:
+                result = tool.run(user_input)
+                self.add_message("tool", result)
+                print(f"[Tool: {tool.name}] {result}")
+            else:
+                response = f"I received your message: '{user_input}'. No tool needed yet."
+                self.add_message("assistant", response)
+                print(response)
+
+
 if __name__ == "__main__":
-    agent = ResearchAgent()
-    print("ResearchAgent ready. Type something (or 'quit').")
-
-    while True:
-        user_input = input("> ")
-        if user_input.lower() in {"quit", "exit"}:
-            break
-
-        response = agent.step(user_input)
-        print(f"{response.role}: {response.content}")
+    tools = [SearchTool()]
+    agent = ResearchAgent(tools=tools)
+    agent.run()
