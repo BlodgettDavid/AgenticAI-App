@@ -120,7 +120,11 @@ class ResearchAgent:
                 print(f"[Tools used: {tool_names}] {final_answer}")
 
             else:
-                response = f"I received your message: '{user_input}'. No tool needed yet."
+                if self.needs_clarification(user_input):
+                    response = self.clarifying_question(user_input)
+                else:
+                    response = f"I received your message: '{user_input}'. No tool needed yet."
+
                 self.add_message("assistant", response)
                 print(response)
 
@@ -128,16 +132,14 @@ class ResearchAgent:
     def reason_about_tools(self, user_input: str):
         """
         Reasoning layer:
-        - If tools match, use them.
-        - BUT if the only tool matched is DefinitionTool AND the input is a question,
-        override and use SearchTool instead.
-        - If no tools match but the input is a question, use SearchTool.
+        - Overrides naive triggers when appropriate.
+        - Adds fallback behaviors for questions and summaries.
         """
         tools = self.choose_tools(user_input)
 
         # If tools matched, check for override conditions
         if tools:
-            # If the only tool is DefinitionTool AND the input is a question → override to SearchTool
+            # Override: If only DefinitionTool matched AND it's a question → use SearchTool
             if (len(tools) == 1 
                 and tools[0].name == "define"
                 and user_input.strip().endswith("?")):
@@ -146,7 +148,6 @@ class ResearchAgent:
                 if search_tool:
                     return [search_tool]
 
-            # Otherwise, use the matched tools
             return tools
 
         # If no tools matched but the input is a question → use SearchTool
@@ -155,8 +156,42 @@ class ResearchAgent:
             if search_tool:
                 return [search_tool]
 
+        # NEW: If the user explicitly asks for a summary → use SummarizerTool
+        lowered = user_input.lower()
+        if "summarize" in lowered or "summary" in lowered:
+            summarizer_tool = next((t for t in self.tools
+                                    if t.name in ["summarizer", "summarize", "summarize_tool"]),
+                                    None)
+
+            if summarizer_tool:
+                return [summarizer_tool]
+
         # No tools
         return []
+    
+    def needs_clarification(self, user_input: str) -> bool:
+        """
+        Decide if the input is too vague and needs a clarifying question.
+        """
+        lowered = user_input.lower().strip()
+
+        # Very short or generic commands
+        if lowered in ["tell me more", "explain", "help", "look this up", "research this", "what about this"]:
+            return True
+
+        # Very short messages with no clear subject
+        if len(lowered.split()) <= 3 and any(
+            phrase in lowered for phrase in ["this", "that", "it", "thing"]
+        ):
+            return True
+
+        return False
+
+    def clarifying_question(self, user_input: str) -> str:
+        return (
+            "I’m not sure what you’d like me to focus on.\n"
+            "Can you clarify what topic, question, or goal you have in mind?"
+        )
 
 
 if __name__ == "__main__":
