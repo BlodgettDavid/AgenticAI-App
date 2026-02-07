@@ -130,16 +130,26 @@ class ResearchAgent:
 
 
     def reason_about_tools(self, user_input: str):
-        """
-        Reasoning layer:
-        - Overrides naive triggers when appropriate.
-        - Adds fallback behaviors for questions and summaries.
-        """
+        lowered = user_input.lower()
+
+        # 1) Multi-tool reasoning FIRST
+        if "define" in lowered and ("search" in lowered or "look up" in lowered):
+            define_tool = next((t for t in self.tools if t.name == "define"), None)
+            search_tool = next((t for t in self.tools if t.name == "search"), None)
+            if define_tool and search_tool:
+                return [define_tool, search_tool]
+
+        if ("search" in lowered or "look up" in lowered) and ("summarize" in lowered or "summary" in lowered):
+            search_tool = next((t for t in self.tools if t.name == "search"), None)
+            summarizer_tool = next((t for t in self.tools if t.name == "summarizer"), None)
+            if search_tool and summarizer_tool:
+                return [search_tool, summarizer_tool]
+
+        # 2) Naive tool triggers
         tools = self.choose_tools(user_input)
 
-        # If tools matched, check for override conditions
+        # 3) Override: definition + question → search
         if tools:
-            # Override: If only DefinitionTool matched AND it's a question → use SearchTool
             if (len(tools) == 1 
                 and tools[0].name == "define"
                 and user_input.strip().endswith("?")):
@@ -150,24 +160,21 @@ class ResearchAgent:
 
             return tools
 
-        # If no tools matched but the input is a question → use SearchTool
+        # 4) Fallback: question → search
         if user_input.strip().endswith("?"):
             search_tool = next((t for t in self.tools if t.name == "search"), None)
             if search_tool:
                 return [search_tool]
 
-        # NEW: If the user explicitly asks for a summary → use SummarizerTool
-        lowered = user_input.lower()
+        # 5) Summarize-on-request
         if "summarize" in lowered or "summary" in lowered:
-            summarizer_tool = next((t for t in self.tools
-                                    if t.name in ["summarizer", "summarize", "summarize_tool"]),
-                                    None)
-
+            summarizer_tool = next((t for t in self.tools if t.name == "summarizer"), None)
             if summarizer_tool:
                 return [summarizer_tool]
 
-        # No tools
+        # 6) No tools
         return []
+
     
     def needs_clarification(self, user_input: str) -> bool:
         """
