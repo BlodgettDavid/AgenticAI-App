@@ -1,5 +1,5 @@
 # Virtual environment
-venv/
+.venv/
 
 # Python cache
 __pycache__/
@@ -29,3 +29,5 @@ dist/
 # OS-specific
 .DS_Store
 Thumbs.db
+
+Notes.txt
