@@ -97,6 +97,14 @@ class ResearchAgent:
 
             tools = self.reason_about_tools(user_input)
 
+            if isinstance(tools, dict) and "multi_step" in tools:
+                print("It looks like you're asking for a multi-step task.")
+                print("I detected the following pattern:")
+                for step in tools["multi_step"]:
+                    print(f"- {step}")
+                print("Should I proceed with these steps in this order?")
+                continue
+
 
             if tools:
                 results = []
@@ -130,7 +138,14 @@ class ResearchAgent:
 
 
     def reason_about_tools(self, user_input: str):
+
+        # Detect multi-step tasks BEFORE tool selection
+        steps = self.detect_multi_step_task(user_input)
+        if steps:
+            return {"multi_step": steps}
+
         lowered = user_input.lower()
+
 
         # 1) Multi-tool reasoning FIRST
         if "define" in lowered and ("search" in lowered or "look up" in lowered):
@@ -199,6 +214,51 @@ class ResearchAgent:
             "I’m not sure what you’d like me to focus on.\n"
             "Can you clarify what topic, question, or goal you have in mind?"
         )
+
+
+    def detect_multi_step_task(self, user_input: str):
+        """
+        Detects whether the user is describing a multi-step task.
+        Returns a list of detected steps if found, otherwise None.
+        """
+        lowered = user_input.lower()
+
+        # --- Pattern A: Sequential connectors ---
+        sequential_markers = ["first", "next", "then", "after that", "finally"]
+        seq_hits = [m for m in sequential_markers if m in lowered]
+        if len(seq_hits) >= 2:
+            return ["multi-step detected via sequential markers"]
+
+        # --- Pattern B: Multiple verbs in sequence ---
+        verbs = ["search", "summarize", "compare", "define", "extract",
+                "analyze", "synthesize", "evaluate", "look up", "find"]
+        verb_hits = [v for v in verbs if v in lowered]
+        if len(verb_hits) >= 3:
+            return ["multi-step detected via verb chain"]
+
+        # --- Pattern C: Numbered steps ---
+        import re
+        numbered_steps = re.findall(r"\b\d+\.", user_input)
+        if len(numbered_steps) >= 2:
+            return ["multi-step detected via numbered steps"]
+
+        # --- Pattern D: Multi-clause instructions ---
+        clauses = [c.strip() for c in re.split(r",|;|and then|followed by", lowered)]
+        clause_verbs = sum(any(v in c for v in verbs) for c in clauses)
+        if clause_verbs >= 2:
+            return ["multi-step detected via multi-clause instruction"]
+
+        # --- Pattern E: Multi-stage research tasks ---
+        research_verbs = ["search", "find", "gather", "look up"]
+        analysis_verbs = ["analyze", "evaluate", "extract"]
+        synthesis_verbs = ["summarize", "compare", "conclude"]
+
+        if (any(v in lowered for v in research_verbs)
+            and any(v in lowered for v in analysis_verbs)
+            and any(v in lowered for v in synthesis_verbs)):
+            return ["multi-step detected via multi-stage research pattern"]
+
+        return None
 
 
 if __name__ == "__main__":
