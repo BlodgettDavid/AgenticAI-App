@@ -99,12 +99,11 @@ class ResearchAgent:
 
             if isinstance(tools, dict) and "multi_step" in tools:
                 print("It looks like you're asking for a multi-step task.")
-                print("I detected the following pattern:")
-                for step in tools["multi_step"]:
-                    print(f"- {step}")
+                print("Here are the steps I detected:")
+                for i, step in enumerate(tools["multi_step"], 1):
+                    print(f"{i}. {step}")
                 print("Should I proceed with these steps in this order?")
                 continue
-
 
             if tools:
                 results = []
@@ -139,13 +138,13 @@ class ResearchAgent:
 
     def reason_about_tools(self, user_input: str):
 
+        lowered = user_input.lower()
+
         # Detect multi-step tasks BEFORE tool selection
         steps = self.detect_multi_step_task(user_input)
         if steps:
-            return {"multi_step": steps}
-
-        lowered = user_input.lower()
-
+            extracted = self.extract_steps(user_input)
+            return {"multi_step": extracted or steps}
 
         # 1) Multi-tool reasoning FIRST
         if "define" in lowered and ("search" in lowered or "look up" in lowered):
@@ -260,6 +259,49 @@ class ResearchAgent:
 
         return None
 
+
+    def extract_steps(self, user_input: str):
+        """
+        Extracts ordered steps from a multi-step instruction.
+        Returns a list of step strings.
+        """
+        lowered = user_input.lower()
+        steps = []
+
+        import re
+
+        # --- Pattern 1: Numbered steps ---
+        numbered = re.findall(r"\d+\.\s*([^0-9]+)", user_input)
+        if len(numbered) >= 2:
+            return [step.strip() for step in numbered]
+
+        # --- Pattern 2: Sequential connectors ---
+        connectors = ["first", "next", "then", "after that", "finally"]
+        pattern = r"(first|next|then|after that|finally)"
+        parts = re.split(pattern, lowered)
+
+        if len(parts) > 1:
+            # Reconstruct steps by pairing connector + text
+            for i in range(1, len(parts), 2):
+                connector = parts[i]
+                text = parts[i+1].strip()
+                steps.append(f"{connector} {text}")
+            return steps
+
+        # --- Pattern 3: Verb-anchored clauses ---
+        verbs = ["search", "summarize", "compare", "define", "extract",
+                "analyze", "synthesize", "evaluate", "look up", "find"]
+
+        clauses = re.split(r",|;|and then|followed by", lowered)
+        for clause in clauses:
+            clause = clause.strip()
+            if any(v in clause for v in verbs):
+                steps.append(clause)
+
+        if len(steps) >= 2:
+            return steps
+
+        return None
 
 if __name__ == "__main__":
     llm = LLMClient()
