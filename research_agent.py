@@ -124,7 +124,9 @@ class ResearchAgent:
                 return cleaned
 
         return user_input
-    
+
+
+
     def run(self):
         print("ResearchAgent ready. Type 'exit' to quit.")
 
@@ -137,13 +139,20 @@ class ResearchAgent:
 
             tools = self.reason_about_tools(user_input)
 
-            if isinstance(tools, dict) and "multi_step" in tools:
+            if isinstance(tools, dict) and "multi_step_parsed" in tools:
                 print("It looks like you're asking for a multi-step task.")
                 print("Here are the steps I detected:")
-                for i, step in enumerate(tools["multi_step"], 1):
+
+                for i, step in enumerate(tools["multi_step_raw"], 1):
                     print(f"{i}. {step}")
-                print("Should I proceed with these steps in this order?")
+
+                print("\nHere is how I interpret them:")
+                for i, step in enumerate(tools["multi_step_parsed"], 1):
+                    print(f"{i}. action={step['action']}, target={step['target']}, tool={step['tool']}")
+
+                print("\nShould I proceed with these steps in this order?")
                 continue
+
 
             if tools:
                 results = []
@@ -176,6 +185,16 @@ class ResearchAgent:
                 print(response)
 
 
+    def parse_steps(self, steps: list) -> list:
+        """
+        Convert a list of raw step strings into structured step objects.
+        """
+        parsed = []
+        for step in steps:
+            parsed.append(self.parse_step(step))
+        return parsed
+
+
     def reason_about_tools(self, user_input: str):
 
         lowered = user_input.lower()
@@ -184,7 +203,15 @@ class ResearchAgent:
         steps = self.detect_multi_step_task(user_input)
         if steps:
             extracted = self.extract_steps(user_input)
-            return {"multi_step": extracted or steps}
+
+            if extracted:
+                parsed = self.parse_steps(extracted)
+                return {
+                    "multi_step_raw": extracted,
+                    "multi_step_parsed": parsed
+                }
+            else:
+                return {"multi_step_raw": steps}
 
         # 1) Multi-tool reasoning FIRST
         if "define" in lowered and ("search" in lowered or "look up" in lowered):
@@ -310,7 +337,7 @@ class ResearchAgent:
         # --- Pattern 1: Numbered steps ---
         numbered = re.findall(r"\d+\.\s*([^0-9]+)", user_input)
         if len(numbered) >= 2:
-            return [step.strip() for step in numbered]
+            return [step.strip().rstrip(",.;") for step in numbered]
 
         # --- Pattern 2: Sequential connectors ---
         connectors = ["first", "next", "then", "after that", "finally"]
@@ -322,9 +349,10 @@ class ResearchAgent:
         if len(parts) > 1:
             # Reconstruct steps using original text slices
             original_parts = re.split(pattern, user_input, flags=re.IGNORECASE)
+        
             for i in range(1, len(original_parts), 2):
                 connector = original_parts[i]
-                text = original_parts[i+1].strip()
+                text = original_parts[i+1].strip().rstrip(",.;")
                 steps.append(f"{connector} {text}")
             return steps
 
@@ -333,22 +361,23 @@ class ResearchAgent:
                 "analyze", "synthesize", "evaluate", "look up", "find"]
 
         # Split using lowercase for detection, but map back to original text
-        lowered_clauses = re.split(r",|;|and then|followed by", lowered)
-        original_clauses = re.split(r",|;|and then|followed by", user_input, flags=re.IGNORECASE)
+        lowered_clauses = re.split(r",|;|and then|followed by| and ", lowered)
+        original_clauses = re.split(r",|;|and then|followed by| and ", user_input, flags=re.IGNORECASE)
 
         for low_clause, orig_clause in zip(lowered_clauses, original_clauses):
             if any(v in low_clause for v in verbs):
-                steps.append(orig_clause.strip())
+                steps.append(orig_clause.strip().rstrip(",.;"))
 
         if len(steps) >= 2:
             return steps
 
         return None
-
     
     # ---------------------------------------------------------
     # Step Parsing: Convert a raw extracted step into a structured object
     # ---------------------------------------------------------
+    
+    
     def parse_step(self, step_text: str) -> dict:
         """
         Parse a raw step string into a structured step object.
@@ -364,6 +393,15 @@ class ResearchAgent:
 
         raw = step_text.strip()
         lower = raw.lower()
+
+        # Strip leading sequencing connectors like "first", "then", etc.
+        connectors = ["first", "next", "then", "after that", "finally"]
+        for conn in connectors:
+            prefix = conn + " "
+            if lower.startswith(prefix):
+                raw = raw[len(conn):].strip()
+                lower = raw.lower()
+                break
 
         # ---------------------------------------------------------
         # 1. Identify the action verb (canonical form)
