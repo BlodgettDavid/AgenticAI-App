@@ -1,3 +1,6 @@
+import re
+
+# Inside ResearchAgent class (or a helper module)
 class LLMClient:
     """
     Minimal LLM client wrapper.
@@ -60,6 +63,38 @@ class ResearchAgent:
         self.tools = tools or []
         self.history = []
 
+    
+    VERB_SYNONYMS = {
+        "search": "search",
+        "look up": "search",
+        "find": "search",
+        "research": "search",
+
+        "summarize": "summarize",
+        "condense": "summarize",
+        "recap": "summarize",
+
+        "define": "define",
+        "explain": "define",
+        "clarify": "define",
+
+        "compare": "compare",
+        "contrast": "compare",
+        "differentiate": "compare",
+
+        "extract": "extract",
+        "identify": "extract",
+        "pull out": "extract",
+    }
+
+    ACTION_TO_TOOL = {
+        "search": "search",
+        "summarize": "summarizer",
+        "define": "define",
+        "compare": ["search", "summarizer"],
+        "extract": "summarizer"
+    }
+    
     def add_message(self, role: str, content: str):
         msg = Message(role, content)
         self.history.append(msg)   
@@ -77,14 +112,19 @@ class ResearchAgent:
         return matched
 
 
-
     def extract_query(self, user_input: str, tool):
-        text = user_input.lower()
-        for trigger in tool.triggers:
-            if trigger in text:
-                return text.replace(trigger, "").strip()
-        return user_input
+        text = user_input.strip()
 
+        for trigger in tool.triggers:
+            # Build a case-insensitive regex for the trigger
+            pattern = re.compile(re.escape(trigger), re.IGNORECASE)
+            if pattern.search(text):
+                # Remove the trigger regardless of case
+                cleaned = pattern.sub("", text).strip()
+                return cleaned
+
+        return user_input
+    
     def run(self):
         print("ResearchAgent ready. Type 'exit' to quit.")
 
@@ -236,7 +276,6 @@ class ResearchAgent:
             return ["multi-step detected via verb chain"]
 
         # --- Pattern C: Numbered steps ---
-        import re
         numbered_steps = re.findall(r"\b\d+\.", user_input)
         if len(numbered_steps) >= 2:
             return ["multi-step detected via numbered steps"]
@@ -263,12 +302,10 @@ class ResearchAgent:
     def extract_steps(self, user_input: str):
         """
         Extracts ordered steps from a multi-step instruction.
-        Returns a list of step strings.
+        Returns a list of step strings in ORIGINAL casing.
         """
         lowered = user_input.lower()
-        steps = []
-
-        import re
+        steps = []        
 
         # --- Pattern 1: Numbered steps ---
         numbered = re.findall(r"\d+\.\s*([^0-9]+)", user_input)
@@ -278,13 +315,16 @@ class ResearchAgent:
         # --- Pattern 2: Sequential connectors ---
         connectors = ["first", "next", "then", "after that", "finally"]
         pattern = r"(first|next|then|after that|finally)"
+
+        # Split using lowercase for detection, but map back to original text
         parts = re.split(pattern, lowered)
 
         if len(parts) > 1:
-            # Reconstruct steps by pairing connector + text
-            for i in range(1, len(parts), 2):
-                connector = parts[i]
-                text = parts[i+1].strip()
+            # Reconstruct steps using original text slices
+            original_parts = re.split(pattern, user_input, flags=re.IGNORECASE)
+            for i in range(1, len(original_parts), 2):
+                connector = original_parts[i]
+                text = original_parts[i+1].strip()
                 steps.append(f"{connector} {text}")
             return steps
 
@@ -292,16 +332,90 @@ class ResearchAgent:
         verbs = ["search", "summarize", "compare", "define", "extract",
                 "analyze", "synthesize", "evaluate", "look up", "find"]
 
-        clauses = re.split(r",|;|and then|followed by", lowered)
-        for clause in clauses:
-            clause = clause.strip()
-            if any(v in clause for v in verbs):
-                steps.append(clause)
+        # Split using lowercase for detection, but map back to original text
+        lowered_clauses = re.split(r",|;|and then|followed by", lowered)
+        original_clauses = re.split(r",|;|and then|followed by", user_input, flags=re.IGNORECASE)
+
+        for low_clause, orig_clause in zip(lowered_clauses, original_clauses):
+            if any(v in low_clause for v in verbs):
+                steps.append(orig_clause.strip())
 
         if len(steps) >= 2:
             return steps
 
         return None
+
+    
+    # ---------------------------------------------------------
+    # Step Parsing: Convert a raw extracted step into a structured object
+    # ---------------------------------------------------------
+    def parse_step(self, step_text: str) -> dict:
+        """
+        Parse a raw step string into a structured step object.
+        Example:
+            "search AI" ->
+            {
+                "raw": "search AI",
+                "action": "search",
+                "target": "AI",
+                "tool": "search"
+            }
+        """
+
+        raw = step_text.strip()
+        lower = raw.lower()
+
+        # ---------------------------------------------------------
+        # 1. Identify the action verb (canonical form)
+        # ---------------------------------------------------------
+        action = None
+        matched_verb = None
+
+        # Sort verbs by length so multi-word verbs match first ("look up")
+        for verb in sorted(self.VERB_SYNONYMS.keys(), key=len, reverse=True):
+            if lower.startswith(verb):
+                action = self.VERB_SYNONYMS[verb]
+                matched_verb = verb
+                break
+
+        if action is None:
+            # Fallback: treat the first word as the action
+            parts = lower.split()
+            action = parts[0]
+            matched_verb = parts[0]
+
+        # ---------------------------------------------------------
+        # 2. Extract the target (everything after the verb)
+        # ---------------------------------------------------------
+        target_text = raw[len(matched_verb):].strip()
+
+        # Special handling for compare
+        if action == "compare":
+            # Split on "and" for two targets
+            if " and " in target_text.lower():
+                targets = [t.strip() for t in target_text.split("and")]
+            else:
+                # If only one item, still wrap in list
+                targets = [target_text]
+            target = targets
+        else:
+            target = target_text
+
+        # ---------------------------------------------------------
+        # 3. Map action to tool(s)
+        # ---------------------------------------------------------
+        tool = self.ACTION_TO_TOOL.get(action, None)
+
+        # ---------------------------------------------------------
+        # 4. Return structured step object
+        # ---------------------------------------------------------
+        return {
+            "raw": raw,
+            "action": action,
+            "target": target,
+            "tool": tool
+        }
+
 
 if __name__ == "__main__":
     llm = LLMClient()
