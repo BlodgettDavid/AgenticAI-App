@@ -1,0 +1,15 @@
+[project]
+name = "agenticai_app"
+version = "0.1.0"
+description = "Application built on the AgenticAI framework"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31.0"
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
