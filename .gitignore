@@ -30,8 +30,5 @@ dist/
 .DS_Store
 Thumbs.db
 
-#ignore this folder with tests until it becomes more mature with future tests
-tests/
-
-#notes file about project
-Notes.txt
+# Personal notes (keep private)
+docs/Notes.txt
