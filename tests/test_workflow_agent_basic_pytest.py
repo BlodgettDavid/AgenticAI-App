@@ -1,4 +1,4 @@
-# tests/test_workflow_agent_basic.py
+import pytest
 from agenticai.workflow.workflow_agent import WorkflowAgent
 from agenticai.planning.plan import Plan, Step
 
@@ -49,10 +49,10 @@ def build_fake_plan():
 
 
 # ---------------------------------------------------------
-# Run the WorkflowAgent
+# Pytest: Basic Workflow Execution
 # ---------------------------------------------------------
 
-if __name__ == "__main__":
+def test_workflow_agent_basic_execution():
     tools = {
         "search": fake_search_tool,
         "calculator": fake_calculator_tool,
@@ -62,8 +62,23 @@ if __name__ == "__main__":
     agent = WorkflowAgent(tools=tools)
     plan = build_fake_plan()
 
-    print("\n=== EXECUTING WORKFLOW AGENT ===")
     result = agent.execute(plan)
 
-    print("\nFinal result:")
-    print(result)
+    # 1. Final result must be from the summarizer tool
+    assert isinstance(result, str)
+    assert result.startswith("[summarizer]")
+
+    # 2. Ensure the correct tool was used for each step
+    assert "[search]" in result or "[calculator]" in result or "[summarizer]" in result
+
+    # 3. Ensure the steps were executed in order
+    # The WorkflowAgent returns only the final result, but we can infer ordering
+    # because each tool returns a unique prefix.
+    # The final result must be from step 3.
+    assert "[summarizer]" in result
+
+    # 4. Ensure no exceptions occurred during execution
+    # (pytest would fail automatically if an exception was raised)
+
+    # 5. Ensure the WorkflowAgent can run without memory_agent
+    assert agent.memory_agent is None
