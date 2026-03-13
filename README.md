@@ -1,19 +1,55 @@
 # AgenticAI-App
 
-This repository contains the application layer built on top of the AgenticAI framework. While the AgenticAI framework provides the core abstractions for agents, tools, planning, memory, and workflow orchestration, this repository demonstrates how to build a runnable application using those components.
+AgenticAI-App is the application layer built on top of the AgenticAI framework. While the framework provides deterministic planning, workflow execution, tool orchestration, and core abstractions, this repository demonstrates how to assemble those components into a runnable command-line application.
 
-The app includes a simple command-line interface (CLI) that uses the `ResearchAgent` and built-in tools from the AgenticAI framework. It also includes a suite of workflow tests that validate multi-step reasoning, refinement, dependencies, and conditional execution.
+The app exposes a simple CLI that sends user queries through the deterministic Phase 2 pipeline:
+
+1. **PlanningAgent** generates a structured multi-step plan.  
+2. **WorkflowAgent** executes the plan step-by-step.  
+3. **Tools** are invoked deterministically when required.  
+4. **Final results** are synthesized and returned to the user.
+
+This repository also includes a clean Phase 2 test suite (unit + integration) that validates the deterministic pipeline end-to-end.
 
 ---
 
 ## Purpose of This Repository
 
 - Provide a runnable example of how to use the AgenticAI framework  
-- Demonstrate how to assemble agents, tools, and workflows into an application  
-- Serve as a testing ground for workflow logic and multi-step reasoning  
+- Demonstrate how to assemble the deterministic planning → workflow pipeline into an application  
+- Serve as a testing ground for deterministic workflows, tool execution, and multi-step reasoning  
 - Offer a clean starting point for building more advanced agentic applications  
 
 This repository depends on the AgenticAI framework, which must be installed separately.
+
+---
+
+## Architecture Overview
+
+The application layer uses the following deterministic pipeline:
+
+```
+User Input
+   ↓
+PlanningAgent
+   ↓
+Structured Plan (steps with actions, targets, and optional tools)
+   ↓
+WorkflowAgent
+   ↓
+Deterministic step-by-step execution
+   ↓
+Tool calls (if required)
+   ↓
+Final synthesized output
+```
+
+This pipeline ensures:
+
+- No hidden reasoning  
+- No unpredictable branching  
+- Fully inspectable intermediate steps  
+- Deterministic execution for testing and reproducibility  
 
 ---
 
@@ -22,7 +58,7 @@ This repository depends on the AgenticAI framework, which must be installed sepa
 ```
 src/
     agenticai_app/
-        main.py            – CLI entry point for running the ResearchAgent
+        main.py            – CLI entry point for running the deterministic pipeline
         __init__.py        – Package initializer
 
     cli/                   – Placeholder for future CLI commands
@@ -30,24 +66,16 @@ src/
     workflows/             – Placeholder for workflow definitions
 
 tests/
-    test_step_2_4.py
-    test_workflow_agent_basic.py
-    test_workflow_agent_conditionals.py
-    test_workflow_agent_dependencies.py
-    test_workflow_agent_dependencies_out_of_order.py
-    test_workflow_agent_final_synthesis.py
-    test_workflow_agent_global_refinement.py
-    test_workflow_agent_parallel.py
-    test_workflow_agent_refinement.py
-    test_workflow_agent_while.py
+    unit/                  – Unit tests for CLI and app-level components
+    integration/           – Integration tests for deterministic planning → workflow execution
 
 docs/
     Notes.txt              – Personal notes (ignored by Git)
 
-pyproject.toml             – Package metadata  
-requirements.txt           – Python dependencies  
-README.md                  – This file  
-.gitignore                 – Ignore rules  
+pyproject.toml             – Package metadata
+requirements.txt           – Python dependencies
+README.md                  – This file
+.gitignore                 – Ignore rules
 ```
 
 ---
@@ -76,7 +104,7 @@ pip install -r requirements.txt
 
 ## Running the Application
 
-To start the interactive ResearchAgent CLI:
+To start the deterministic CLI:
 
 ```bash
 python -m agenticai_app.main
@@ -85,46 +113,51 @@ python -m agenticai_app.main
 You will see:
 
 ```
-ResearchAgent ready. Type 'exit' to quit.
+AgenticAI deterministic CLI ready. Type 'exit' to quit.
 ```
 
-You can then type natural language queries, and the agent will respond using tools or direct reasoning.
+You can then type natural language queries, and the app will:
+
+1. Generate a deterministic plan  
+2. Execute each step  
+3. Call tools if needed  
+4. Produce a final synthesized answer  
 
 ---
 
 ## Example Interaction
 
 ```
-You: define machine learning
-[Tools used: DefinitionTool] Machine learning is...
-
 You: summarize the history of quantum computing
-[Tools used: SummarizerTool] Quantum computing began...
 
-You: compare supervised and unsupervised learning
-It looks like you're asking for a multi-step task.
+Plan:
+1. action=research, target=history of quantum computing, tool=SearchTool
+2. action=summarize, target=research results, tool=SummarizerTool
 
-Raw steps:
-1. compare supervised learning
-2. compare unsupervised learning
+Execution:
+[SearchTool] Quantum computing began...
+[SummarizerTool] Summary: ...
 
-Parsed steps:
-1. action=compare, target=supervised learning, tool=None
-2. action=compare, target=unsupervised learning, tool=None
+Final:
+Quantum computing emerged from...
 ```
 
 ---
 
 ## Running Tests
 
-This repository includes a suite of workflow tests that validate:
+This repository includes a Phase 2 test suite that validates:
 
-- step parsing  
-- refinement loops  
-- dependency ordering  
-- conditional execution  
-- parallel execution  
-- final synthesis  
+### Unit tests
+- CLI behavior  
+- Input handling  
+- Output formatting  
+
+### Integration tests
+- Deterministic planning  
+- Step execution  
+- Tool invocation  
+- Final synthesis  
 
 To run all tests:
 
@@ -147,31 +180,36 @@ CLI, workflows, and configuration are separated cleanly.
 ### 3. Extensibility  
 New workflows, tools, and agents can be added without modifying core logic.
 
-### 4. Transparency  
+### 4. Determinism  
+All reasoning and execution paths are explicit and testable.
+
+### 5. Transparency  
 The app exposes intermediate reasoning steps when appropriate.
 
 ---
 
 ## Roadmap
 
-### Iteration 2  
-- Add real CLI commands under `src/cli/`  
-- Add configuration loading under `src/configs/`  
-- Add workflow templates under `src/workflows/`  
-- Add integration tests for CLI behavior  
+### Phase 2 (Completed)
+- Deterministic CLI  
+- Deterministic planning → workflow pipeline  
+- New unit + integration test suite  
+- Removal of Phase 1 workflow tests  
+- Clean repo structure  
 
-### Iteration 3  
-- Add multi-agent orchestration demos  
-- Add advanced workflow execution examples  
-- Add logging and tracing utilities  
+### Phase 3 (Next)
+- Multi-agent orchestration demos  
+- Advanced workflow execution examples  
+- Logging and tracing utilities  
 
-### Iteration 4+  
-- Add GUI or web-based interface  
-- Add plugin system for custom workflows  
-- Add deployment templates  
+### Future Iterations
+- GUI or web-based interface  
+- Plugin system for custom workflows  
+- Deployment templates  
 
 ---
 
 ## License
 
 This project is licensed under the MIT License.
+```
