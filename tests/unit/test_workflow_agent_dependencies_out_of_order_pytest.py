@@ -1,5 +1,4 @@
-# tests/test_workflow_agent_dependencies_out_of_order.py
-
+import pytest
 from agenticai.workflow.workflow_agent import WorkflowAgent
 from agenticai.planning.plan import Plan, Step
 
@@ -8,7 +7,7 @@ def fake_tool(action, target, raw_text, context):
     return f"{action}({target})"
 
 
-if __name__ == "__main__":
+def test_workflow_agent_dependencies_out_of_order():
     tools = {"tool": fake_tool}
 
     # Intentionally scrambled order
@@ -41,8 +40,14 @@ if __name__ == "__main__":
     plan = Plan(steps=steps)
     agent = WorkflowAgent(tools=tools)
 
-    print("\n=== EXECUTING OUT-OF-ORDER DEPENDENCY TEST ===")
     result = agent.execute(plan)
 
-    print("\nFinal result:")
-    print(result)
+    # The DAG should reorder steps into: 1 → 2 → 3
+    assert result == "train(model)"
+
+    # Ensure earlier steps did not override the final result
+    assert result != "clean(data)"
+    assert result != "load(data)"
+
+    # Ensure the output is a string (sanity check)
+    assert isinstance(result, str)

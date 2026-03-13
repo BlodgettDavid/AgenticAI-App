@@ -1,48 +1,33 @@
-from agenticai import (
-    ResearchAgent,
-    SearchTool,
-    DefinitionTool,
-    SummarizerTool,
-    LLMClient,
-)
+from agenticai.planning.planning_agent import PlanningAgent
+from agenticai.workflow.workflow_agent import WorkflowAgent
+from agenticai.tools import SearchTool, DefinitionTool, SummarizerTool
+
 
 def main():
-    llm = LLMClient()
-    tools = [
-        SearchTool(),
-        DefinitionTool(),
-        SummarizerTool(llm_client=llm)
-    ]
+    print("Phase 2 AgenticAI CLI. Type 'exit' to quit.")
 
-    agent = ResearchAgent(tools=tools)
+    tools = {
+        "search": SearchTool(),
+        "define": DefinitionTool(),
+        "summarize": SummarizerTool(),
+    }
 
-    print("ResearchAgent ready. Type 'exit' to quit.")
+    planner = PlanningAgent(tool_registry=tools)
+    workflow = WorkflowAgent(tools=tools)
 
     while True:
         user_input = input("You: ")
         if user_input.lower() == "exit":
             break
 
-        result = agent.run(user_input)
+        # Pass raw text directly into create_plan()
+        plan = planner.create_plan(user_input, user_input=user_input)
 
-        if result["type"] == "multi_step_detected":
-            print("It looks like you're asking for a multi-step task.")
-            print("\nRaw steps:")
-            for i, step in enumerate(result["raw_steps"], 1):
-                print(f"{i}. {step}")
+        # Execute the plan (correct method)
+        result = workflow.execute(plan)
 
-            print("\nParsed steps:")
-            for i, step in enumerate(result["parsed_steps"], 1):
-                print(f"{i}. action={step['action']}, target={step['target']}, tool={step['tool']}")
-            continue
+        print(f"Result: {result}")
 
-        if result["type"] == "tool_result":
-            tools_used = ", ".join(result["tools_used"])
-            print(f"[Tools used: {tools_used}] {result['answer']}")
-            continue
-
-        if result["type"] == "assistant_response":
-            print(result["answer"])
 
 if __name__ == "__main__":
     main()

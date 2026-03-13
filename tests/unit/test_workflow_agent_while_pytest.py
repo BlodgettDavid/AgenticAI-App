@@ -1,5 +1,4 @@
-# tests/test_workflow_agent_while.py
-
+import pytest
 from agenticai.workflow.workflow_agent import WorkflowAgent
 from agenticai.planning.plan import Plan, Step
 
@@ -19,10 +18,12 @@ def fake_counter_tool(action, target, raw_text, context):
 
 
 # ---------------------------------------------------------
-# Build a plan with a single looping step
+# Pytest: While Loop Behavior
 # ---------------------------------------------------------
 
-def build_loop_plan():
+def test_workflow_agent_while_loop():
+    tools = {"counter": fake_counter_tool}
+
     steps = [
         Step(
             step_number=1,
@@ -33,23 +34,12 @@ def build_loop_plan():
             repeat_until="step_1 contains 'count=3'"
         )
     ]
-    return Plan(steps=steps)
 
-
-# ---------------------------------------------------------
-# Run the WorkflowAgent
-# ---------------------------------------------------------
-
-if __name__ == "__main__":
-    tools = {
-        "counter": fake_counter_tool,
-    }
-
+    plan = Plan(steps=steps)
     agent = WorkflowAgent(tools=tools)
-    plan = build_loop_plan()
 
-    print("\n=== EXECUTING WORKFLOW AGENT (WHILE LOOP TEST) ===")
     result = agent.execute(plan)
 
-    print("\nFinal result:")
-    print(result)
+    # Assertions
+    assert isinstance(result, str)
+    assert result == "count=3"

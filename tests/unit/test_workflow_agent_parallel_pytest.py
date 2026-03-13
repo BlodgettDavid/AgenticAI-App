@@ -7,7 +7,8 @@ def slow_tool(action, target, raw_text, context):
     time.sleep(1)
     return f"{action}({target})"
 
-if __name__ == "__main__":
+
+def test_workflow_agent_parallel_execution():
     tools = {"tool": slow_tool}
 
     steps = [
@@ -19,10 +20,17 @@ if __name__ == "__main__":
     plan = Plan(steps=steps)
     agent = WorkflowAgent(tools=tools)
 
-    print("\n=== PARALLEL EXECUTION TEST ===")
     start = time.time()
     result = agent.execute(plan)
     end = time.time()
+    elapsed = end - start
 
-    print("\nFinal result:", result)
-    print("Elapsed time:", end - start)
+    # Final result must come from the last step
+    assert result == "combine(C)"
+
+    # Parallelism check:
+    # Steps 1 and 2 each sleep 1 second → should run in parallel
+    # Step 3 sleeps 1 second → total should be ~2 seconds if sequential
+    # With correct batching, total should be ~1 + epsilon
+    assert elapsed < 2.0, f"Execution took too long ({elapsed}s), parallelism may be broken"
+    assert elapsed > 1.0, f"Execution was too fast ({elapsed}s), step 3 may not have waited"

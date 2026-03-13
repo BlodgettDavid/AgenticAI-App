@@ -1,10 +1,21 @@
+import pytest
 from agenticai.workflow.workflow_agent import WorkflowAgent
 from agenticai.planning.plan import Plan, Step
+
+
+# ---------------------------------------------------------
+# Fake tool
+# ---------------------------------------------------------
 
 def fake_tool(action, target, raw_text, context):
     return f"{action}({target})"
 
-if __name__ == "__main__":
+
+# ---------------------------------------------------------
+# Pytest: Dependency Ordering
+# ---------------------------------------------------------
+
+def test_workflow_agent_dependencies():
     tools = {"tool": fake_tool}
 
     steps = [
@@ -36,7 +47,15 @@ if __name__ == "__main__":
     plan = Plan(steps=steps)
     agent = WorkflowAgent(tools=tools)
 
-    print("\n=== EXECUTING DEPENDENCY TEST ===")
     result = agent.execute(plan)
-    print("\nFinal result:")
-    print(result)
+
+    # 1. Final result must be from the last step in the dependency chain
+    assert result == "train(model)"
+
+    # 2. Ensure earlier steps did not override the final result
+    assert result != "clean(data)"
+    assert result != "load(data)"
+
+    # 3. Ensure the agent executed all steps in dependency order
+    # We infer this because the final result is correct and no exceptions occurred.
+    assert isinstance(result, str)
